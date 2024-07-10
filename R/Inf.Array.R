@@ -1,0 +1,290 @@
+
+# Start  Inf.Array() function
+###################################################################
+
+#' @title Find the optimal testing configuration for informative 
+#' array testing without master pooling
+#'
+#' @description Find the optimal testing configuration (OTC) for
+#' informative array testing without master pooling and calculate
+#' the associated operating characteristics.
+#'
+#' @param p the probability of disease, which can be specified as an overall 
+#' probability of disease, from which a heterogeneous vector of individual 
+#' probabilities will be generated, or a heterogeneous vector of individual 
+#' probabilities specified by the user.
+#' @param group.sz a single group size (representing the row/column size)
+#' for which to calculate the operating characteristics, or a range of group
+#' (row/column) sizes over which to find the OTC.
+#' @param alpha a scale parameter for the beta distribution that specifies 
+#' the degree of heterogeneity for the generated probability vector. If a 
+#' heterogeneous vector of individual probabilities is specified by the user, 
+#' \kbd{alpha} can be specified as \kbd{NA} or will be ignored.
+#' @inheritParams OTC
+#'
+#' @details This function finds the OTC and computes the associated 
+#' operating characteristics for informative array testing without 
+#' master pooling, implemented using the gradient arrangement described 
+#' in McMahan et al. (2012). Array testing without master pooling involves 
+#' amalgamating specimens in rows and columns for the first stage of testing. 
+#' This function uses only square arrays, which is the way array-based group 
+#' testing is carried out in most real-world applications. Operating 
+#' characteristics calculated are expected number of tests, pooling sensitivity, 
+#' pooling specificity, pooling positive predictive value, and pooling negative 
+#' predictive value for the algorithm. See Hitt et al. (2018)
+#' or McMahan et al. (2012) at \url{http://chrisbilder.com/grouptesting} 
+#' for additional details on the implementaion of informative array 
+#' testing without master pooling.
+#' 
+#' The value(s) specified by \kbd{group.sz} represent the initial group 
+#' (row/column) size. If a single value is provided for \kbd{group.sz}, operating
+#' characteristics will be calculated and no optimization will be performed.
+#' If a range of group sizes is specified, the OTC will be found over all 
+#' group sizes.
+#' 
+#' The displayed pooling sensitivity, pooling specificity, pooling positive 
+#' predictive value, and pooling negative predictive value are weighted 
+#' averages of the corresponding individual accuracy measures for all 
+#' individuals within the initial group for a hierarchical algorithm, or 
+#' within the entire array for an array-based algorithm.
+#' Expressions for these averages are provided in the Supplementary 
+#' Material for Hitt et al. (2018). These expressions are based on accuracy 
+#' definitions given by Altman and Bland (1994a, 1994b).
+#' 
+#' @return A list containing:
+#' \item{prob}{the probability of disease, as specified by the user.}
+#' \item{alpha}{the level of heterogeneity used to generate the vector of individual
+#' probabilities.}
+#' \item{Se}{the sensitivity of the diagnostic test.}
+#' \item{Sp}{the specificity of the diagnostic test.}
+#' \item{opt.ET, opt.MAR, opt.GR}{a list for each objective function specified 
+#' by the user, containing:
+#' \describe{
+#' \item{OTC}{a list specifying elements of the optimal testing configuration, 
+#' which include:
+#' \describe{
+#' \item{Array.dim}{the row/column size for the first stage of testing.}
+#' \item{Array.sz}{the overall array size (the square of the row/column size).}}}
+#' \item{p.mat}{the sorted matrix of individual probabilities, arranged using 
+#' the gradient method described by McMahan et al. (2012).}
+#' \item{ET}{the expected testing expenditure for the OTC.}
+#' \item{value}{the value of the objective function per individual.}
+#' \item{PSe}{the overall pooling sensitivity for the algorithm.
+#' Further details are given under 'Details'.}
+#' \item{PSp}{the overall pooling specificity for the algorithm.
+#' Further details are given under 'Details'.}
+#' \item{PPPV}{the overall pooling positive predictive value for the algorithm.
+#' Further details are given under 'Details'.}
+#' \item{PNPV}{the overall pooling negative predictive value for the algorithm.
+#' Further details are given under 'Details'.}}}
+#'
+#' @author Brianna D. Hitt
+#'
+#' @references
+#' \insertRef{Altman1994a}{binGroup}
+#' 
+#' \insertRef{Altman1994b}{binGroup}
+#' 
+#' \insertRef{Graff1972}{binGroup}
+#' 
+#' \insertRef{Hitt2018}{binGroup}
+#' 
+#' \insertRef{Malinovsky2016}{binGroup}
+#' 
+#' \insertRef{McMahan2012b}{binGroup}
+#'
+#' @seealso
+#' \code{\link{NI.Array}} for non-informative array testing without master 
+#' pooling, \code{\link{NI.A2M}} for non-informative array testing with master 
+#' pooling, and \code{\link{OTC}} for finding the optimal testing configuration for
+#' a number of standard group testing algorithms.
+#'
+#' \url{http://chrisbilder.com/grouptesting}
+#'
+#' @family OTC functions
+#'
+#' @examples
+#' # Find the OTC for informative array testing without 
+#' #   master pooling over a range of group (row/column) sizes.
+#' # A vector of individual probabilities is generated using
+#' #   the expected value of order statistics from a beta 
+#' #   distribution with p = 0.03 and a heterogeneity level 
+#' #   of alpha = 2. Depending on the specified probability, 
+#' #   alpha level, and overall group size, simulation may 
+#' #   be necessary in order to generate the vector of individual
+#' #   probabilities. This is done using p.vec.func() and 
+#' #   requires the user to set a seed in order to reproduce 
+#' #   results.
+#' # This examples takes approximately 30 seconds to run.
+#' # Estimated running time was calculated using a 
+#' #   computer with 16 GB of RAM and one core of an 
+#' #   Intel i7-6500U processor.
+#' \dontrun{
+#' set.seed(1002)
+#' Inf.Array(p=0.03, Se=0.99, Sp=0.99, group.sz=3:20, 
+#' obj.fn=c("ET", "MAR"), alpha=2)}
+#' 
+#' # This example takes less than 1 second to run.
+#' # Estimated running time was calculated using a 
+#' #   computer with 16 GB of RAM and one core of an 
+#' #   Intel i7-6500U processor.
+#' set.seed(1002)
+#' Inf.Array(p=0.03, Se=0.99, Sp=0.99, group.sz=3:5, 
+#' obj.fn=c("ET", "MAR"), alpha=2)
+#'
+#' # Find the OTC for a specified group (row/column) size 
+#' #   for informative array testing without master pooling.
+#' # This example takes less than 1 second to run.
+#' # Estimated running time was calculated using a 
+#' #   computer with 16 GB of RAM and one core of an 
+#' #   Intel i7-6500U processor.
+#' set.seed(14849)
+#' Inf.Array(p=p.vec.func(p=0.05, alpha=0.5, grp.sz=100), 
+#' Se=0.95, Sp=0.95, group.sz=10, obj.fn=c("ET", "MAR", "GR"),
+#' weights=matrix(data=c(1,1,10,10), nrow=2, ncol=2, byrow=TRUE),
+#' alpha=NA)
+
+# Brianna Hitt - 05-01-17
+# Updated: Brianna Hitt - 06-20-18
+Inf.Array <- function(p, Se, Sp, group.sz, obj.fn, weights=NULL, alpha=2){
+  
+  start.time<-proc.time()
+  
+  set.of.I <- group.sz
+  
+  save.it <- matrix(data=NA, nrow=length(set.of.I), ncol=max(set.of.I)^2+18)
+  count <- 1
+  
+  for(I in set.of.I){
+    N <- I^2
+    
+    # build a vector of probabilities for a heterogeneous population
+    if(length(p)==1){
+      p.vec <- p.vec.func(p=p, alpha=alpha, grp.sz=N)
+    } else if(length(p)>1){
+      p.vec <- sort(p)
+      alpha <- NA
+    }
+    
+    # build a matrix of probabilities using the gradient design
+    p.ga <- Informative.array.prob(prob.vec=p.vec, nr=I, nc=I, method="gd")
+    
+    # call Array.Measures() to calculate descriptive measures for the given array size
+    save.info <- Array.Measures(p=p.ga, se=Se, sp=Sp)
+    
+    # extract accuracy measures for each individual
+    ET <- save.info$T
+    PSe.mat <- save.info$PSe
+    PSp.mat <- save.info$PSp
+    if("MAR" %in% obj.fn){
+      MAR <- MAR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat)
+    } else{MAR <- NA}
+    
+    # calculate overall accuracy measures
+    PSe <- sum(p.ga*PSe.mat)/sum(p.ga)
+    PSp <- sum((1-p.ga)*(PSp.mat))/sum(1-p.ga)
+    PPPV <- sum(p.ga*PSe.mat)/sum(p.ga*PSe.mat + (1-p.ga)*(1-PSp.mat))
+    PNPV <- sum((1-p.ga)*PSp.mat)/sum((1-p.ga)*PSp.mat + p.ga*(1-PSe.mat))
+    
+    # for each row in the matrix of weights, calculate the GR function
+    if(is.null(dim(weights))){
+      GR1 <- NA
+      GR2 <- NA
+      GR3 <- NA
+      GR4 <- NA
+      GR5 <- NA
+      GR6 <- NA
+    } else{
+      GR1 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[1,1], D2=weights[1,2])
+      if(dim(weights)[1]>=2){
+        GR2 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[2,1], D2=weights[2,2])
+      } else{GR2 <- NA}
+      if(dim(weights)[1]>=3){
+        GR3 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[3,1], D2=weights[3,2])
+      } else{GR3 <- NA}
+      if(dim(weights)[1]>=4){
+        GR4 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[4,1], D2=weights[4,2])
+      } else{GR4 <- NA}
+      if(dim(weights)[1]>=5){
+        GR5 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[5,1], D2=weights[5,2])
+      } else{GR5 <- NA}
+      if(dim(weights)[1]>=6){
+        GR6 <- GR.func(ET=ET, p.vec=p.ga, PSe.vec=PSe.mat, PSp.vec=PSp.mat, D1=weights[6,1], D2=weights[6,2])
+      } else{GR6 <- NA}
+    }
+    
+    save.it[count,] <- c(p.vec, rep(NA, max(0, max(set.of.I)^2-length(p.vec))), alpha, Se, Sp, I, N, ET, ET/N, MAR, GR1/N, GR2/N, GR3/N, GR4/N, GR5/N, GR6/N, PSe, PSp, PPPV, PNPV)
+    cat("Row/Column Size=", I, ", Array Size=", N, "\n", sep="")
+    count <- count + 1
+    
+  }
+  
+  # find the optimal testing configuration, over all array sizes considered
+  result.ET <- save.it[save.it[,(max(set.of.I)^2+7)]==min(save.it[,(max(set.of.I)^2+7)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+7),(max(set.of.I)^2+15):ncol(save.it))]
+  result.MAR <- save.it[save.it[,(max(set.of.I)^2+8)]==min(save.it[,(max(set.of.I)^2+8)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+8),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR1 <- save.it[save.it[,(max(set.of.I)^2+9)]==min(save.it[,(max(set.of.I)^2+9)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+9),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR2 <- save.it[save.it[,(max(set.of.I)^2+10)]==min(save.it[,(max(set.of.I)^2+10)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+10),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR3 <- save.it[save.it[,(max(set.of.I)^2+11)]==min(save.it[,(max(set.of.I)^2+11)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+11),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR4 <- save.it[save.it[,(max(set.of.I)^2+12)]==min(save.it[,(max(set.of.I)^2+12)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+12),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR5 <- save.it[save.it[,(max(set.of.I)^2+13)]==min(save.it[,(max(set.of.I)^2+13)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+13),(max(set.of.I)^2+15):ncol(save.it))]
+  result.GR6 <- save.it[save.it[,(max(set.of.I)^2+14)]==min(save.it[,(max(set.of.I)^2+14)]), c(1:(max(set.of.I)^2+6),(max(set.of.I)^2+14),(max(set.of.I)^2+15):ncol(save.it))]
+  
+  p.ga.ET <- Informative.array.prob(prob.vec=(result.ET[1:max(set.of.I)^2])[!is.na(result.ET[1:max(set.of.I)^2])], nr=result.ET[max(set.of.I)^2+4], nc=result.ET[max(set.of.I)^2+4], method="gd")
+  if("MAR" %in% obj.fn){
+    p.ga.MAR <- Informative.array.prob(prob.vec=(result.MAR[1:max(set.of.I)^2])[!is.na(result.MAR[1:max(set.of.I)^2])], nr=result.MAR[max(set.of.I)^2+4], nc=result.MAR[max(set.of.I)^2+4], method="gd")
+  } else{p.ga.MAR <- NA}
+  if(is.null(dim(weights))){
+    p.ga.GR1 <- NA
+    p.ga.GR2 <- NA
+    p.ga.GR3 <- NA
+    p.ga.GR4 <- NA
+    p.ga.GR5 <- NA
+    p.ga.GR6 <- NA
+  }  else{
+    p.ga.GR1 <- Informative.array.prob(prob.vec=(result.GR1[1:max(set.of.I)^2])[!is.na(result.GR1[1:max(set.of.I)^2])], nr=result.GR1[max(set.of.I)^2+4], nc=result.GR1[max(set.of.I)^2+4], method="gd")
+    if(dim(weights)[1]>=2){
+      p.ga.GR2 <- Informative.array.prob(prob.vec=(result.GR2[1:max(set.of.I)^2])[!is.na(result.GR2[1:max(set.of.I)^2])], nr=result.GR2[max(set.of.I)^2+4], nc=result.GR2[max(set.of.I)^2+4], method="gd")
+    } else{p.ga.GR2 <- NA}
+    if(dim(weights)[1]>=3){
+      p.ga.GR3 <- Informative.array.prob(prob.vec=(result.GR3[1:max(set.of.I)^2])[!is.na(result.GR3[1:max(set.of.I)^2])], nr=result.GR3[max(set.of.I)^2+4], nc=result.GR3[max(set.of.I)^2+4], method="gd")
+    } else{p.ga.GR3 <- NA}
+    if(dim(weights)[1]>=4){
+      p.ga.GR4 <- Informative.array.prob(prob.vec=(result.GR4[1:max(set.of.I)^2])[!is.na(result.GR4[1:max(set.of.I)^2])], nr=result.GR4[max(set.of.I)^2+4], nc=result.GR4[max(set.of.I)^2+4], method="gd")
+    } else{p.ga.GR4 <- NA}
+    if(dim(weights)[1]>=5){
+      p.ga.GR5 <- Informative.array.prob(prob.vec=(result.GR5[1:max(set.of.I)^2])[!is.na(result.GR5[1:max(set.of.I)^2])], nr=result.GR5[max(set.of.I)^2+4], nc=result.GR5[max(set.of.I)^2+4], method="gd")
+    } else{p.ga.GR5 <- NA}
+    if(dim(weights)[1]>=6){
+      p.ga.GR6 <- Informative.array.prob(prob.vec=(result.GR6[1:max(set.of.I)^2])[!is.na(result.GR6[1:max(set.of.I)^2])], nr=result.GR6[max(set.of.I)^2+4], nc=result.GR6[max(set.of.I)^2+4], method="gd")
+    } else{p.ga.GR6 <- NA}
+  }
+  
+  # create a list of results for each objective function
+  opt.ET <- list("OTC"=list("Array.dim"=result.ET[(max(set.of.I)^2+4)], "Array.sz"=result.ET[(max(set.of.I)^2+5)]), "p.mat"=p.ga.ET,
+                 "ET"=result.ET[(max(set.of.I)^2+6)], "value"=result.ET[(max(set.of.I)^2+7)], "PSe"=result.ET[(max(set.of.I)^2+8)], "PSp"=result.ET[(max(set.of.I)^2+9)], "PPPV"=result.ET[(max(set.of.I)^2+10)], "PNPV"=result.ET[(max(set.of.I)^2+11)])
+  opt.MAR <- list("OTC"=list("Array.dim"=result.MAR[(max(set.of.I)^2+4)], "Array.sz"=result.MAR[(max(set.of.I)^2+5)]), "p.mat"=p.ga.MAR,
+                  "ET"=result.MAR[(max(set.of.I)^2+6)], "value"=result.MAR[(max(set.of.I)^2+7)], "PSe"=result.MAR[(max(set.of.I)^2+8)], "PSp"=result.MAR[(max(set.of.I)^2+9)], "PPPV"=result.MAR[(max(set.of.I)^2+10)], "PNPV"=result.MAR[(max(set.of.I)^2+11)])
+  opt.GR1 <- list("OTC"=list("Array.dim"=result.GR1[(max(set.of.I)^2+4)], "Array.sz"=result.GR1[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR1,
+                  "ET"=result.GR1[(max(set.of.I)^2+6)], "value"=result.GR1[(max(set.of.I)^2+7)], "PSe"=result.GR1[(max(set.of.I)^2+8)], "PSp"=result.GR1[(max(set.of.I)^2+9)], "PPPV"=result.GR1[(max(set.of.I)^2+10)], "PNPV"=result.GR1[(max(set.of.I)^2+11)])
+  opt.GR2 <- list("OTC"=list("Array.dim"=result.GR2[(max(set.of.I)^2+4)], "Array.sz"=result.GR2[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR2,
+                  "ET"=result.GR2[(max(set.of.I)^2+6)], "value"=result.GR2[(max(set.of.I)^2+7)], "PSe"=result.GR2[(max(set.of.I)^2+8)], "PSp"=result.GR2[(max(set.of.I)^2+9)], "PPPV"=result.GR2[(max(set.of.I)^2+10)], "PNPV"=result.GR2[(max(set.of.I)^2+11)])
+  opt.GR3 <- list("OTC"=list("Array.dim"=result.GR3[(max(set.of.I)^2+4)], "Array.sz"=result.GR3[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR3,
+                  "ET"=result.GR3[(max(set.of.I)^2+6)], "value"=result.GR3[(max(set.of.I)^2+7)], "PSe"=result.GR3[(max(set.of.I)^2+8)], "PSp"=result.GR3[(max(set.of.I)^2+9)], "PPPV"=result.GR3[(max(set.of.I)^2+10)], "PNPV"=result.GR3[(max(set.of.I)^2+11)])
+  opt.GR4 <- list("OTC"=list("Array.dim"=result.GR4[(max(set.of.I)^2+4)], "Array.sz"=result.GR4[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR4,
+                  "ET"=result.GR4[(max(set.of.I)^2+6)], "value"=result.GR4[(max(set.of.I)^2+7)], "PSe"=result.GR4[(max(set.of.I)^2+8)], "PSp"=result.GR4[(max(set.of.I)^2+9)], "PPPV"=result.GR4[(max(set.of.I)^2+10)], "PNPV"=result.GR4[(max(set.of.I)^2+11)])
+  opt.GR5 <- list("OTC"=list("Array.dim"=result.GR5[(max(set.of.I)^2+4)], "Array.sz"=result.GR5[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR5,
+                  "ET"=result.GR5[(max(set.of.I)^2+6)], "value"=result.GR5[(max(set.of.I)^2+7)], "PSe"=result.GR5[(max(set.of.I)^2+8)], "PSp"=result.GR5[(max(set.of.I)^2+9)], "PPPV"=result.GR5[(max(set.of.I)^2+10)], "PNPV"=result.GR5[(max(set.of.I)^2+11)])
+  opt.GR6 <- list("OTC"=list("Array.dim"=result.GR6[(max(set.of.I)^2+4)], "Array.sz"=result.GR6[(max(set.of.I)^2+5)]), "p.mat"=p.ga.GR6,
+                  "ET"=result.GR6[(max(set.of.I)^2+6)], "value"=result.GR6[(max(set.of.I)^2+7)], "PSe"=result.GR6[(max(set.of.I)^2+8)], "PSp"=result.GR6[(max(set.of.I)^2+9)], "PPPV"=result.GR6[(max(set.of.I)^2+10)], "PNPV"=result.GR6[(max(set.of.I)^2+11)])
+  
+  # create a list of results, including all objective functions
+  opt.all <- list("opt.ET"=opt.ET, "opt.MAR"=opt.MAR, "opt.GR1"=opt.GR1, "opt.GR2"=opt.GR2, 
+                  "opt.GR3"=opt.GR3, "opt.GR4"=opt.GR4, "opt.GR5"=opt.GR5, "opt.GR6"=opt.GR6)
+  # remove any objective functions not requested by the user
+  opt.req <- Filter(function(x) !is.na(x$ET), opt.all)
+  time.it(start.time)
+  c("prob"=list(p), "alpha"=alpha, "Se"=Se, "Sp"=Sp, opt.req)
+  
+}
+
+###################################################################
